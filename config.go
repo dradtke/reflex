@@ -22,9 +22,10 @@ type Config struct {
 	inverseGlobs   []string
 	subSymbol      string
 	startService   bool
+	wireStdin      bool
 	onlyFiles      bool
 	onlyDirs       bool
-	allFiles bool
+	allFiles       bool
 }
 
 func (c *Config) registerFlags(f *flag.FlagSet) {
@@ -44,6 +45,8 @@ func (c *Config) registerFlags(f *flag.FlagSet) {
 	f.BoolVarP(&c.startService, "start-service", "s", false, `
             Indicates that the command is a long-running process to be
             restarted on matching changes.`)
+	f.BoolVar(&c.wireStdin, "stdin", false, `
+            Redirect the user's standard input to this process.`)
 	f.BoolVar(&c.onlyFiles, "only-files", false, `
             Only match files (not directories).`)
 	f.BoolVar(&c.onlyDirs, "only-dirs", false, `

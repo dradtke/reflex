@@ -20,6 +20,7 @@ type Reflex struct {
 	id           int
 	source       string // Describes what config/line defines this Reflex
 	startService bool
+	wireStdin    bool
 	backlog      Backlog
 	matcher      Matcher
 	onlyFiles    bool
@@ -72,6 +73,10 @@ func NewReflex(c *Config) (*Reflex, error) {
 		backlog = NewUnifiedBacklog()
 	}
 
+	if c.wireStdin && !c.startService {
+		return nil, errors.New("using --stdin only works for long-running services")
+	}
+
 	if c.onlyFiles && c.onlyDirs {
 		return nil, errors.New("cannot specify both --only-files and --only-dirs")
 	}
@@ -80,6 +85,7 @@ func NewReflex(c *Config) (*Reflex, error) {
 		id:           reflexID,
 		source:       c.source,
 		startService: c.startService,
+		wireStdin:    c.wireStdin,
 		backlog:      backlog,
 		matcher:      matcher,
 		onlyFiles:    c.onlyFiles,
@@ -181,9 +187,9 @@ func (r *Reflex) runEach(names <-chan string) {
 				r.terminate()
 			}
 			infoPrintln(r.id, "Starting service")
-			r.runCommand(name, stdout)
+			r.runCommand(name, stdout, r.wireStdin)
 		} else {
-			r.runCommand(name, stdout)
+			r.runCommand(name, stdout, false)
 			<-r.done
 			r.mu.Lock()
 			r.running = false
@@ -240,9 +246,12 @@ func replaceSubSymbol(command []string, subSymbol string, name string) []string 
 var seqCommands = &sync.Mutex{}
 
 // runCommand runs the given Command. All output is passed line-by-line to the stdout channel.
-func (r *Reflex) runCommand(name string, stdout chan<- OutMsg) {
+func (r *Reflex) runCommand(name string, stdout chan<- OutMsg, wireStdin bool) {
 	command := replaceSubSymbol(r.command, r.subSymbol, name)
 	cmd := exec.Command(command[0], command[1:]...)
+	if wireStdin {
+		cmd.Stdin = os.Stdin
+	}
 	r.cmd = cmd
 
 	if flagSequential {
@@ -290,7 +299,7 @@ func (r *Reflex) Start(changes <-chan string) {
 	if r.startService {
 		// Easy hack to kick off the initial start.
 		infoPrintln(r.id, "Starting service")
-		r.runCommand("", stdout)
+		r.runCommand("", stdout, r.wireStdin)
 	}
 }
 
